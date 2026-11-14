@@ -132,7 +132,7 @@ iPhone ─(Tailscale)─▶ tailscale0 ──ip rule: tailscale0 から来たも
 | `tailscale` | exit node として tailnet に参加（カーネルモード） |
 | `mitmproxy` | `mitm0` に TUN モードでアタッチして TCP/UDP を傍受。WireGuard モードも同時に提供。非 root で動作 |
 
-*   `tailscale` と `mitmproxy` は `router` の名前空間に相乗りしているので、どちらを再起動しても数秒で復旧します。`router` を再起動した場合は `docker compose up -d --force-recreate` で全体を作り直してください。
+*   `tailscale` と `mitmproxy` は `router` の名前空間に相乗りしています。どれを再起動しても数秒〜十数秒で自動復旧します（`router` が作り直されて古い名前空間に取り残された場合は、[`scripts/netns-guard.sh`](scripts/netns-guard.sh) が検知して再起動させます）。
 *   コンテナから IPv6 で外に出られない環境では、IPv6 は mitmproxy に流さず到達不能として返し、端末側で IPv4 にフォールバックさせます。
 
 ---

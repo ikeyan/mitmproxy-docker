@@ -100,6 +100,15 @@ check "mitmproxy saw HTTP/3 flow"   flow '[.[] | select(.type=="http" and .reque
 [ "$V6_UPLINK" = 1 ] && check "mitmproxy saw IPv6 flow" flow '[.[] | select(.server_conn.address[0] | test(":"))] | length > 0'
 check "client tailnet IP is visible ($CLIENT_IP)" flow "[.[] | select(.client_conn.peername[0]==\"$CLIENT_IP\")] | length > 0"
 
+log "recovery: restart router (network namespace owner)"
+C restart router >/dev/null 2>&1
+via_mitm() { client curl -4 -fsS -m 5 --cacert /ca.pem -o /dev/null https://example.com 2>/dev/null; }
+check "traffic recovers after router restart" retry 60 via_mitm
+same_ns() { [ "$(C exec -T router readlink /proc/1/ns/net)" = "$(C exec -T "$1" readlink /proc/1/ns/net)" ]; }
+check "tailscale re-joined router's netns" same_ns tailscale
+check "mitmproxy re-joined router's netns" same_ns mitmproxy
+check "web UI reachable after recovery" curl -fsS -m 5 -o /dev/null "$WEB/?token=$PW"
+
 log "result"
 [ "$fail" = 0 ] && echo "ALL PASSED" || echo "SOME CHECKS FAILED"
 exit "$fail"

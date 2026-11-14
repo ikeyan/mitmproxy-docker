@@ -50,6 +50,8 @@ services:
       TS_DEBUG_PRETENDPOINT: ${TS_ENDPOINT:-}
     volumes:
       - "./tailscale_state:/var/lib/tailscale"
+      - "./scripts/netns-guard.sh:/netns-guard.sh:ro"
+    entrypoint: ["/bin/sh", "/netns-guard.sh", "/usr/local/bin/containerboot"]
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -64,6 +66,8 @@ services:
         condition: service_healthy
     volumes:
       - "./mitmproxy_data:/home/mitmproxy/.mitmproxy"
+      - "./scripts/netns-guard.sh:/netns-guard.sh:ro"
+    entrypoint: ["/bin/sh", "/netns-guard.sh", "docker-entrypoint.sh"]
     devices:
       - /dev/net/tun:/dev/net/tun
     # mitm0 は router が mitmproxy ユーザー所有の永続 TUN として作成済み。
