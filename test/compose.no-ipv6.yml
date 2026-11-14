@@ -1,0 +1,4 @@
+# Simulates a runtime without IPv6 egress: ./test/run.sh with TEST_NO_IPV6=1
+networks:
+  default:
+    enable_ipv6: false

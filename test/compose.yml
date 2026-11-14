@@ -1,0 +1,43 @@
+# Local verification harness: a private tailnet (headscale) + a client node that
+# uses the mitm exit node. Usage: ./test/run.sh
+services:
+  headscale:
+    image: "headscale/headscale:v0.29.7@sha256:11f81665e842809db9fe3006a38c56a66e968baa5abd4bac498e86445572b970"
+    command: serve
+    volumes:
+      - "./test/headscale/config.yaml:/etc/headscale/config.yaml:ro"
+
+  router:
+    ports: !override
+      - "127.0.0.1:18085:8081"
+    volumes:
+      - "./test/.state/mitmproxy:/mitmproxy_data:ro"
+
+  tailscale:
+    depends_on:
+      - headscale
+    environment:
+      TS_EXTRA_ARGS: --advertise-exit-node --login-server=http://headscale:8080
+    volumes:
+      - "./test/.state/ts-exit:/var/lib/tailscale"
+
+  mitmproxy:
+    volumes:
+      - "./test/.state/mitmproxy:/home/mitmproxy/.mitmproxy"
+
+  client:
+    image: "tailscale/tailscale:v1.104.7@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4"
+    hostname: test-client
+    depends_on:
+      - headscale
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_USERSPACE: "false"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_EXTRA_ARGS: --login-server=http://headscale:8080 --accept-dns=false
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 0

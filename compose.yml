@@ -1,17 +1,79 @@
 services:
+  # ネットワーク名前空間の持ち主。tailscale / mitmproxy はこの名前空間に相乗りする。
+  # 落ちにくい router を持ち主にしておくと、tailscale や mitmproxy が再起動しても
+  # 名前空間ごと失われず、相乗りしているコンテナが古い名前空間に取り残されない。
+  # mitm0（mitmproxy 用の永続 TUN）を作成し、tailscale0 から入ってきた
+  # exit node 宛のトラフィックをそこへ流す（scripts/router.sh）。
+  router:
+    image: "tailscale/tailscale:v1.104.7@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4"
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv4.ip_forward: 1
+      net.ipv6.conf.all.forwarding: 1
+      net.ipv6.conf.all.disable_ipv6: 0
+    ports:
+      - "127.0.0.1:8085:8081" # mitmweb
+      - "51820:51820/udp" # WireGuard モード
+      - "41641:41641/udp" # Tailscale（LAN 内の直接接続用）
+    volumes:
+      - "./scripts/router.sh:/router.sh:ro"
+      - "./mitmproxy_data:/mitmproxy_data:ro" # mitmproxy ユーザーの uid/gid 判定用
+    entrypoint: ["/bin/sh", "/router.sh"]
+    healthcheck:
+      test: ["CMD", "ip", "link", "show", "mitm0"]
+      interval: 5s
+      start_period: 30s
+      start_interval: 1s
+    restart: unless-stopped
+
+  # Tailscale ノード（exit node）
+  tailscale:
+    image: "tailscale/tailscale:v1.104.7@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4"
+    network_mode: service:router
+    depends_on:
+      router:
+        condition: service_healthy
+    environment:
+      TS_HOSTNAME: ${TS_HOSTNAME:-mitm-exit}
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true" # ログイン済みなら再起動時に auth key で再登録しない
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false" # tailscale0 を作るカーネルモード（転送パケットをルーティングで横取りするため必須）
+      TS_EXTRA_ARGS: --advertise-exit-node ${TS_EXTRA_ARGS:-}
+      TS_TAILSCALED_EXTRA_ARGS: --port=41641
+    volumes:
+      - "./tailscale_state:/var/lib/tailscale"
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+
   mitmproxy:
     image: "mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f"
-    container_name: mitmproxy_wireguard
-    ports:
-      - "127.0.0.1:8085:8081"
-      - "51820:51820/udp"
+    network_mode: service:router
+    depends_on:
+      router:
+        condition: service_healthy
     volumes:
       - "./mitmproxy_data:/home/mitmproxy/.mitmproxy"
-    cap_add:
-      - NET_ADMIN 
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    # mitm0 は router が mitmproxy ユーザー所有の永続 TUN として作成済み。
+    # mitmproxy は非 root・NET_ADMIN なしでそれにアタッチする。
     command: >
       mitmweb
+      --mode tun:mitm0
       --mode wireguard
       --web-host 0.0.0.0
       --set web_password=${WEB_PASSWORD:-password}
     restart: unless-stopped
+
+networks:
+  default:
+    # exit node 経由の IPv6 を mitmproxy から外へ出すため。
+    # Docker Desktop 4.42+ は既定でデュアルスタック。OrbStack は設定で IPv6 を有効化すること。
+    enable_ipv6: true

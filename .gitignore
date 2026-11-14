@@ -6,3 +6,9 @@ mitmproxy_data/
 
 # Local configuration files
 .env
+
+# Tailscale node state
+tailscale_state/
+
+# Test harness state
+test/.state/
