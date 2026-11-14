@@ -71,7 +71,7 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     # mitm0 は router が mitmproxy ユーザー所有の永続 TUN として作成済み。
-    # mitmproxy は非 root・NET_ADMIN なしでそれにアタッチする。
+    # mitmproxy は NET_ADMIN なしでそれにアタッチする（実行 uid はイメージの entrypoint が mitmproxy_data の所有者に合わせる）。
     command: >
       mitmweb
       --mode tun:mitm0
