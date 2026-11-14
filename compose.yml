@@ -17,7 +17,8 @@ services:
     ports:
       - "127.0.0.1:8085:8081" # mitmweb
       - "51820:51820/udp" # WireGuard モード
-      - "41641:41641/udp" # Tailscale（LAN 内の直接接続用）
+      # Tailscale（LAN 内の直接接続用）。Mac 本体の Tailscale が 41641 を使うので別ポートにする
+      - "${TS_PORT:-41642}:${TS_PORT:-41642}/udp"
     volumes:
       - "./scripts/router.sh:/router.sh:ro"
       - "./mitmproxy_data:/mitmproxy_data:ro" # mitmproxy ユーザーの uid/gid 判定用
@@ -43,7 +44,10 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false" # tailscale0 を作るカーネルモード（転送パケットをルーティングで横取りするため必須）
       TS_EXTRA_ARGS: --advertise-exit-node ${TS_EXTRA_ARGS:-}
-      TS_TAILSCALED_EXTRA_ARGS: --port=41641
+      TS_TAILSCALED_EXTRA_ARGS: --port=${TS_PORT:-41642}
+      # 端末に広告する追加エンドポイント（例: 192.168.1.150:41642）。
+      # コンテナは Docker の NAT の内側にいるので、これが無いと LAN 内でも直接接続になりにくい。
+      TS_DEBUG_PRETENDPOINT: ${TS_ENDPOINT:-}
     volumes:
       - "./tailscale_state:/var/lib/tailscale"
     devices:

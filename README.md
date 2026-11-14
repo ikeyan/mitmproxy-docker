@@ -67,7 +67,18 @@ docker compose up -d
 iPhone の Tailscale アプリで **Exit Node → `mitm-exit`** を選ぶだけです。やめるときは Exit Node を None に戻します。
 tailnet 内の他のマシンへの通信はこれまで通り使えます。
 
-> 💡 同じ LAN 内では `41641/udp` 経由で直接つながります。`docker compose exec tailscale tailscale ping <スマホ名>` で `direct` になっているか確認できます（`relay` だと遅くなります）。
+### LAN 内で直接つなぐ（推奨）
+
+コンテナは Docker の NAT の内側にいるため、そのままでは LAN 内の端末とも DERP（Tailscale の中継サーバー）経由になりがちです。
+`.env` に Mac の LAN IP を設定すると、そのアドレスを端末に広告して直接つながるようになります。
+
+```ini
+TS_PORT=41642                      # Mac 本体の Tailscale が 41641 を使うのでずらす
+TS_ENDPOINT=192.168.1.150:41642    # ipconfig getifaddr en0 で確認した IP と TS_PORT
+```
+
+`docker compose exec tailscale tailscale ping <スマホ名>` が `via 192.168.x.x:41642` なら直接接続、`via DERP(...)` なら中継です。
+Mac の IP が DHCP で変わったら `TS_ENDPOINT` を更新して `docker compose up -d` してください。
 
 ---
 
